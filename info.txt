@@ -1,0 +1,23 @@
+https://github.com/OthersideAI/self-operating-computer
+
+python -m pip install --upgrade pip
+
+pip install virtualenv
+
+-- virtualenv env
+python -m venv venv
+
+-- windows
+venv\Scripts\activate
+
+-- linux
+source venv/bin/activate
+
+-- gitbash
+source venv/scripts/activate
+
+pip install -r requirements.txt
+pip install .
+winpty operate
+
+deactivate
