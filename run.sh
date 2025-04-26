@@ -14,8 +14,10 @@ $PYTHON -m virtualenv venv
 
 # Detect OS for activation
 if [[ "$OSTYPE" == "msys" ]]; then
+    # Git Bash on Windows
     source venv/Scripts/activate
 elif [[ "$OSTYPE" == "linux-gnu"* ]] || [[ "$(uname -r)" == *"WSL"* ]]; then
+    # Linux or WSL
     source venv/bin/activate
 elif [[ "$OSTYPE" == "win32" ]]; then
     venv\Scripts\activate
@@ -28,23 +30,44 @@ fi
 pip install -r requirements.txt
 pip install .
 
-# If in WSL or Git Bash, set DISPLAY and auto-start VcXsrv if needed
-if grep -qi microsoft /proc/version 2>/dev/null || [[ "$OSTYPE" == "msys" ]]; then
-    echo "Detected WSL or Git Bash - setting DISPLAY=:0"
+# Handle display based on environment
+if [[ "$OSTYPE" == "msys" ]]; then
+    echo "Detected Git Bash on Windows - setting DISPLAY=:0"
     export DISPLAY=:0
 
     echo "🔍 Checking for VcXsrv process..."
-    if ! tasklist.exe | grep -i "vcxsrv.exe" >/dev/null; then
-        echo "⚡ VcXsrv is not running. Attempting to start it..."
-
-        "/c/Program Files/VcXsrv/vcxsrv.exe" :0 -multiwindow -clipboard -wgl -ac &
-        sleep 5
-    else
-        echo "✅ VcXsrv is already running."
+    if tasklist.exe | grep -i "vcxsrv.exe" >/dev/null; then
+        echo "⚠️ Old VcXsrv detected - killing it first..."
+        taskkill.exe /IM vcxsrv.exe /F
+        sleep 2
     fi
 
-    sleep 2
+    echo "⚡ Starting fresh VcXsrv..."
+    "/c/Program Files/VcXsrv/vcxsrv.exe" :0 -multiwindow -clipboard -wgl -ac &
+    sleep 5
+
+elif grep -qi microsoft /proc/version 2>/dev/null; then
+    echo "Detected WSL - unsetting DISPLAY."
+    unset DISPLAY
+    echo "✅ DISPLAY unset for headless WSL mode"
+
+else
+    echo "Detected native Linux (e.g., Pop!_OS) - using system's default DISPLAY."
+    export DISPLAY=${DISPLAY:-:0}
 fi
+
+# Skip checking X server for WSL
+if grep -qi microsoft /proc/version 2>/dev/null; then
+    echo "⚠️ Running in WSL without X server or GUI."
+else
+    if ! timeout 2 bash -c "</dev/tcp/127.0.0.1/6000" 2>/dev/null; then
+        echo "⚠️ Warning: Cannot reach X server at $DISPLAY, continuing anyway without GUI support..."
+    fi
+fi
+
+# === Patch environment so pyautogui/mouseinfo don't crash ===
+export PYAUTOGUI_NO_GUI=1
+export MOUSEINFO_NO_DISPLAY=1
 
 # Run the application
 if [[ "$OSTYPE" == "msys" ]]; then

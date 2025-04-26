@@ -1,63 +1,49 @@
-import pyautogui
+import os
 import platform
-import time
-import math
+import subprocess
 
-from operate.utils.misc import convert_percent_to_decimal
+from PIL import Image, ImageDraw, ImageGrab
 
+# Only import pyautogui and Xlib if GUI is available
+GUI_AVAILABLE = bool(os.environ.get('DISPLAY'))
+
+if GUI_AVAILABLE:
+    import pyautogui
+    import Xlib.display
+    import Xlib.X
+    import Xlib.Xutil  # not sure if Xutil is necessary
 
 class OperatingSystem:
-    def write(self, content):
+    @staticmethod
+    def capture_screen_with_cursor(file_path):
+        user_platform = platform.system()
+
+        if not GUI_AVAILABLE:
+            print("⚠️ GUI not available. Skipping screenshot capture.")
+            return
+
+        if user_platform == "Windows":
+            screenshot = pyautogui.screenshot()
+            screenshot.save(file_path)
+        elif user_platform == "Linux":
+            screen = Xlib.display.Display().screen()
+            size = screen.width_in_pixels, screen.height_in_pixels
+            screenshot = ImageGrab.grab(bbox=(0, 0, size[0], size[1]))
+            screenshot.save(file_path)
+        elif user_platform == "Darwin":  # MacOS
+            subprocess.run(["screencapture", "-C", file_path])
+        else:
+            print(f"⚠️ Platform {user_platform} not supported for screenshots.")
+
+    @staticmethod
+    def compress_screenshot(raw_screenshot_filename, screenshot_filename):
         try:
-            content = content.replace("\\n", "\n")
-            for char in content:
-                pyautogui.write(char)
-        except Exception as e:
-            print("[OperatingSystem][write] error:", e)
-
-    def press(self, keys):
-        try:
-            for key in keys:
-                pyautogui.keyDown(key)
-            time.sleep(0.1)
-            for key in keys:
-                pyautogui.keyUp(key)
-        except Exception as e:
-            print("[OperatingSystem][press] error:", e)
-
-    def mouse(self, click_detail):
-        try:
-            x = convert_percent_to_decimal(click_detail.get("x"))
-            y = convert_percent_to_decimal(click_detail.get("y"))
-
-            if click_detail and isinstance(x, float) and isinstance(y, float):
-                self.click_at_percentage(x, y)
-
-        except Exception as e:
-            print("[OperatingSystem][mouse] error:", e)
-
-    def click_at_percentage(
-        self,
-        x_percentage,
-        y_percentage,
-        duration=0.2,
-        circle_radius=50,
-        circle_duration=0.5,
-    ):
-        try:
-            screen_width, screen_height = pyautogui.size()
-            x_pixel = int(screen_width * float(x_percentage))
-            y_pixel = int(screen_height * float(y_percentage))
-
-            pyautogui.moveTo(x_pixel, y_pixel, duration=duration)
-
-            start_time = time.time()
-            while time.time() - start_time < circle_duration:
-                angle = ((time.time() - start_time) / circle_duration) * 2 * math.pi
-                x = x_pixel + math.cos(angle) * circle_radius
-                y = y_pixel + math.sin(angle) * circle_radius
-                pyautogui.moveTo(x, y, duration=0.1)
-
-            pyautogui.click(x_pixel, y_pixel)
-        except Exception as e:
-            print("[OperatingSystem][click_at_percentage] error:", e)
+            with Image.open(raw_screenshot_filename) as img:
+                if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                    background = Image.new('RGB', img.size, (255, 255, 255))
+                    background.paste(img, mask=img.split()[3])
+                    background.save(screenshot_filename, 'JPEG', quality=85)
+                else:
+                    img.convert('RGB').save(screenshot_filename, 'JPEG', quality=85)
+        except FileNotFoundError:
+            print(f"⚠️ Warning: Screenshot {raw_screenshot_filename} not found, skipping compression.")
